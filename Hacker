@@ -1,0 +1,59 @@
+import telebot
+from rembg import remove
+from PIL import Image
+from io import BytesIO
+import requests
+
+# Add your bot's token and chat ID here
+TOKEN = '8199196634:AAGFO8NoUsqw04fFwpHChqy2P9Ad1JltAdQ'  # Replace with your bot's token
+YOUR_CHAT_ID = '6559702204'  # Replace with your chat ID
+
+# Initialize the bot
+bot = telebot.TeleBot(TOKEN)
+
+# Function to handle incoming messages and photos
+@bot.message_handler(content_types=['photo'])
+def handle_photo(message):
+    try:
+        # Get the photo from the message
+        file_id = message.photo[-1].file_id
+        file_info = bot.get_file(file_id)
+        file = requests.get(f'https://api.telegram.org/file/bot{TOKEN}/{file_info.file_path}')
+        
+        # Open the image using PIL
+        img = Image.open(BytesIO(file.content))
+
+        # Save the original image
+        img.save(f"original_{message.message_id}.png")
+
+        # Process the image to remove the background
+        output = remove(file.content)
+
+        # Open the processed image
+        processed_img = Image.open(BytesIO(output))
+
+        # Change the background color to blue (you can change it to any color)
+        processed_img = processed_img.convert("RGBA")
+        new_bg = Image.new("RGBA", processed_img.size, (0, 0, 255, 255))  # Blue background
+        new_bg.paste(processed_img, (0, 0), processed_img)
+
+        # Save the processed image
+        processed_img.save(f"processed_{message.message_id}.png")
+
+        # Send the original image and processed image back to the user
+        with open(f"original_{message.message_id}.png", "rb") as original_photo:
+            bot.send_photo(message.chat.id, original_photo, caption="Here is your original photo!")
+
+        with open(f"processed_{message.message_id}.png", "rb") as processed_photo:
+            bot.send_photo(message.chat.id, processed_photo, caption="Here is your processed photo with the blue background!")
+
+        # Send the processed photo to your chat (if desired)
+        with open(f"processed_{message.message_id}.png", "rb") as processed_photo:
+            bot.send_photo(YOUR_CHAT_ID, processed_photo, caption="Processed photo sent to you!")
+
+    except Exception as e:
+        print(f"Error: {e}")
+        bot.reply_to(message, "Sorry, something went wrong while processing the image.")
+
+# Start the bot
+bot.polling()
